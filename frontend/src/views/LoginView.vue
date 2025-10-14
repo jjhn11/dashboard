@@ -2,7 +2,7 @@
     <v-container align="center">
         <v-card class="text-center pa-6 rounded-xl w-50" elevation="5">
             <v-avatar size="80" color="primary" class="mb-4">
-                <v-icon size="40" color="white">mdi-account-tie</v-icon>
+                <v-icon size="40" color="white">mdi-account</v-icon>
             </v-avatar>
             <v-card-title class="text-h5">Bienvenido de vuelta</v-card-title>
             <v-card-subtitle>Ingrese sus credenciales para continuar</v-card-subtitle>
