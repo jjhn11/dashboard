@@ -1,3 +1,13 @@
+<script setup>
+import { useRouter } from 'vue-router';
+
+const router = useRouter();
+
+function navigateTo(route) {
+  router.push({ name: route });
+}
+</script>
+
 <template>
   <v-app-bar app class="px-15">
     <v-row class="align-center" no-gutters>
@@ -11,10 +21,11 @@
         </v-toolbar-title>
       </v-col>
 
-      <v-col cols="2" class="d-flex align-center">
+      <v-col cols="2" class="d-flex align-center" @click="navigateTo('home')" style="cursor: pointer;">
           <v-icon>mdi-home-outline</v-icon>
-          <p class="ml-3">Inicio</p>
+          <span class="ml-3">Inicio</span>
       </v-col>
+      
       <v-col cols="2" class="d-flex align-center">
         <v-badge content="3" color="error">
           <v-icon>mdi-chat-outline</v-icon>
@@ -37,7 +48,8 @@
       </template>
 
       <v-list density="compact">
-        <v-list-item title="Mi Perfil" prepend-icon="mdi-account-circle" />
+        <v-list-item title="Perfil" prepend-icon="mdi-account-circle" @click="navigateTo('profile')"/>
+        
         <v-list-item title="Configuración" prepend-icon="mdi-cog-outline" />
         <v-divider />
         <v-list-item title="Cerrar sesión" prepend-icon="mdi-logout" />

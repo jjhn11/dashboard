@@ -7,9 +7,17 @@
             <v-card-title class="text-h5">Crea una cuenta</v-card-title>
             <v-card-subtitle>Ingrese su información para comenzar</v-card-subtitle>
             <v-card-text>
-                <p class="text-start font-weight-bold mb-2">Nombre completo</p>
+                <p class="text-start font-weight-bold mb-2">Nombre</p>
                 <v-text-field
-                    label="John Doe"
+                    label="John"
+                    variant="outlined"
+                    single-line
+                    required
+                ></v-text-field>
+
+                <p class="text-start font-weight-bold mb-2">Apellidos</p>
+                <v-text-field
+                    label="Doe"
                     variant="outlined"
                     single-line
                     required
@@ -22,6 +30,28 @@
                     single-line
                     required
                 ></v-text-field>
+
+                <p class="text-start font-weight-bold mb-2">Teléfono</p>
+                <v-text-field
+                    label="(555) 123-4567"
+                    variant="outlined"
+                    single-line
+                ></v-text-field>
+
+                <p class="text-start font-weight-bold mb-2">URL de foto de perfil</p>
+                <v-text-field
+                    label="https://example.com/foto.jpg"
+                    variant="outlined"
+                    single-line
+                ></v-text-field>
+
+                <p class="text-start font-weight-bold mb-2">Biografía</p>
+                <v-textarea
+                    label="Cuenta algo sobre ti"
+                    variant="outlined"
+                    auto-grow
+                    rows="3"
+                ></v-textarea>
 
                 <p class="text-start font-weight-bold mb-2">Contraseña</p>
                 <v-text-field
