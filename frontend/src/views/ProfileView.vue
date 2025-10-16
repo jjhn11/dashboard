@@ -1,3 +1,93 @@
+<script setup>
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useUserStore } from '@/stores/userStore.js'
+import backend from '@/config/axios.js'
+
+const router = useRouter()
+const userStore = useUserStore()
+
+// Component state
+const isEditing = ref(false)
+const isLoggingOut = ref(false)
+const isSaving = ref(false)
+const isFormValid = ref(false)
+const profileForm = ref(null)
+const showErrorMessage = ref(false)
+const showSuccessMessage = ref(false)
+const errorMessage = ref('')
+
+// Gender options
+const genderOptions = ['Masculino', 'Femenino', 'Otro']
+
+// User profile data
+const userProfile = computed(() => userStore.user)
+
+// Editable profile copy
+const editableProfile = reactive({
+  email: userProfile.value.email,
+  firstName: userProfile.value.firstName,
+  lastName: userProfile.value.lastName,
+  phone: userProfile.value.phone,
+  bio: userProfile.value.description,
+  photoUrl: userProfile.value.photoUrl
+});
+
+// Validation rules
+const rules = {
+  required: value => !!value || 'Este campo es requerido'
+}
+
+// Methods
+async function logout() {
+    isLoggingOut.value = true
+  await userStore.logout();
+  router.push({ name: 'login' });
+    isLoggingOut.value = false
+}
+
+function toggleEdit() {
+  if (isEditing.value) {
+    cancelEdit()
+  } else {
+    startEdit()
+  }
+}
+
+function startEdit() {
+  isEditing.value = true
+}
+
+function cancelEdit() {
+  isEditing.value = false
+  // Reset editable data
+  editableProfile.email = userProfile.value.email;
+  editableProfile.firstName = userProfile.value.firstName;
+  editableProfile.lastName = userProfile.value.lastName;
+  editableProfile.phone = userProfile.value.phone;
+  editableProfile.bio = userProfile.value.bio;
+}
+
+async function saveProfile() {
+  if (!isFormValid.value) return
+
+    isSaving.value = true
+
+    try {
+        // Update user profile via API
+        await userStore.updateProfile(editableProfile);
+        showSuccessMessage.value = true
+        isEditing.value = false
+    } catch (error) {
+        errorMessage.value = error.response?.data?.message || 'Error al actualizar el perfil'
+        showErrorMessage.value = true
+    } finally {
+        isSaving.value = false
+    }
+}
+
+</script>
+
 <template>
   <div class="profile-container">
     <v-container class="profile-content">
@@ -6,7 +96,7 @@
         <div class="profile-photo-container">
           <v-avatar size="120" class="profile-photo">
             <v-img 
-              :src="userProfile.photo || defaultPhoto" 
+              :src="userProfile.photoUrl" 
               :alt="userProfile.name"
               cover
             />
@@ -15,7 +105,7 @@
         </div>
         
         <h2 class="text-h5 font-weight-bold mt-4 mb-1">
-          {{ userProfile.username }}
+          {{ userProfile.firstName }} {{ userProfile.lastName }}
         </h2>
         <p class="text-body-1 text-medium-emphasis mb-1">
           {{ userProfile.email }}
@@ -110,11 +200,11 @@
                 />
             </div>
 
-          <!-- Description -->
+          <!-- Bio -->
             <div class="info-field mb-4">
-                <label class="field-label">Descripción</label>
+                <label class="field-label">Biografía</label>
                 <v-textarea
-                v-model="editableProfile.description"
+                v-model="editableProfile.bio"
                 :readonly="!isEditing"
                 :variant="isEditing ? 'outlined' : 'plain'"
                 density="compact"
@@ -205,188 +295,6 @@
     </v-snackbar>
   </div>
 </template>
-
-<script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { useUserStore } from '@/stores/userStore.js'
-import backend from '@/config/axios.js'
-
-const router = useRouter()
-const userStore = useUserStore()
-
-// Component state
-const isEditing = ref(false)
-const isSaving = ref(false)
-const isLoggingOut = ref(false)
-const isFormValid = ref(false)
-const showSuccessMessage = ref(false)
-const showErrorMessage = ref(false)
-const errorMessage = ref('')
-const profileForm = ref(null)
-
-// Default profile photo
-const defaultPhoto = 'https://cdn.vuetifyjs.com/images/john.jpg'
-
-// Gender options
-const genderOptions = ['Masculino', 'Femenino', 'Otro']
-
-// User profile data
-const userProfile = reactive({
-  username: 'johndoe',
-  email: 'john.doe@example.com',
-  firstName: 'John',
-  lastName: 'Doe',
-  gender: 'Masculino',
-    birthday: '1990-01-01',
-  description: 'Software Engineer',
-  photo: ''
-})
-
-// Editable profile copy
-const editableProfile = reactive({
-  username: 'johndoe',
-  email: 'john.doe@example.com',
-  firstName: 'John',
-  lastName: 'Doe',
-    gender: 'Masculino',
-    birthday: '1990-01-01',
-  description: 'Software Engineer',
-  photo: ''
-})
-
-// Validation rules
-const rules = {
-  required: value => !!value || 'Este campo es requerido'
-}
-
-// Computed properties
-const fullName = computed(() => {
-  return `${editableProfile.firstName} ${editableProfile.lastName}`.trim()
-})
-
-// Methods
-async function logout() {
-  isLoggingOut.value = true
-  try {
-    // Call logout endpoint
-    await backend.post('/auth/logout', {}, { withCredentials: true })
-    
-    // Clear user store completely
-    usuarioStore.clearUser()
-    
-    // Clear any local storage if used
-    localStorage.clear()
-    sessionStorage.clear()
-    
-    // Clear local profile data
-    Object.assign(userProfile, {
-      name: '',
-      studentId: '',
-      firstName: '',
-      lastName: '',
-      career: '',
-      email: '',
-      photo: '',
-      id: null
-    })
-    
-    Object.assign(editableProfile, {
-      studentId: '',
-      firstName: '',
-      lastName: '',
-      career: ''
-    })
-    
-    console.log('Logout completo: datos locales limpiados')
-    
-    // Redirect to login
-    router.replace({ name: 'login' })
-    
-  } catch (error) {
-    console.error('Error during logout:', error)
-    errorMessage.value = 'Error al cerrar sesión'
-    showErrorMessage.value = true
-  } finally {
-    isLoggingOut.value = false
-  }
-}
-
-function toggleEdit() {
-  if (isEditing.value) {
-    cancelEdit()
-  } else {
-    startEdit()
-  }
-}
-
-function startEdit() {
-  isEditing.value = true
-  // Copy current data to editable version
-  editableProfile.studentId = userProfile.studentId
-  editableProfile.firstName = userProfile.firstName
-  editableProfile.lastName = userProfile.lastName
-  editableProfile.career = userProfile.career
-}
-
-function cancelEdit() {
-  isEditing.value = false
-  // Reset editable data
-  editableProfile.studentId = userProfile.studentId
-  editableProfile.firstName = userProfile.firstName
-  editableProfile.lastName = userProfile.lastName
-  editableProfile.career = userProfile.career
-}
-
-async function saveProfile() {
-  if (!isFormValid.value) return
-
-  isSaving.value = true
-  try {
-    // Create user data for update
-    const userData = {
-      control: editableProfile.studentId,
-      nombres: editableProfile.firstName,
-      apellidos: editableProfile.lastName,
-      carrera: editableProfile.career
-    }
-
-    // Check if user exists and update or create
-    const response = await backend.put(`/usuarios/current`, userData, {
-      withCredentials: true
-    })
-
-    // Update local profile data
-    userProfile.studentId = editableProfile.studentId
-    userProfile.firstName = editableProfile.firstName
-    userProfile.lastName = editableProfile.lastName
-    userProfile.career = editableProfile.career
-    userProfile.name = fullName.value
-
-    // Update store if needed
-    .updateProfile(userProfile)
-
-    isEditing.value = false
-    showSuccessMessage.value = true
-
-  } catch (error) {
-    console.error('Error saving profile:', error)
-    errorMessage.value = 'Error al guardar el perfil. Intenta nuevamente.'
-    showErrorMessage.value = true
-  } finally {
-    isSaving.value = false
-  }
-}
-
-async function loadProfile() {
-  
-}
-
-// Lifecycle
-onMounted(() => {
-  loadProfile()
-})
-</script>
 
 <style scoped>
 .profile-container {

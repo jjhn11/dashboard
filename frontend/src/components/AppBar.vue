@@ -1,7 +1,17 @@
 <script setup>
 import { useRouter } from 'vue-router';
+import { useUserStore } from '@/stores/userStore';
+import { computed } from 'vue';
 
+const userStore = useUserStore();
 const router = useRouter();
+
+const userProfile = computed(() => userStore.user);
+
+async function logout() {
+  await userStore.logout();
+  router.push({ name: 'login' });
+}
 
 function navigateTo(route) {
   router.push({ name: route });
@@ -25,7 +35,7 @@ function navigateTo(route) {
           <v-icon>mdi-home-outline</v-icon>
           <span class="ml-3">Inicio</span>
       </v-col>
-      
+
       <v-col cols="2" class="d-flex align-center">
         <v-badge content="3" color="error">
           <v-icon>mdi-chat-outline</v-icon>
@@ -41,7 +51,7 @@ function navigateTo(route) {
       <template #activator="{ props }"> 
         <div v-bind="props" class="avatar-wrapper">
           <v-avatar size="40" color="primary">
-            <v-img src="https://i.pravatar.cc/80?img=15" alt="Perfil" cover />
+            <v-img :src="userProfile.photoUrl" alt="Perfil" cover />
           </v-avatar>
           <v-icon size="16" class="menu-indicator">mdi-menu-down</v-icon>
         </div>
@@ -52,7 +62,7 @@ function navigateTo(route) {
         
         <v-list-item title="Configuración" prepend-icon="mdi-cog-outline" />
         <v-divider />
-        <v-list-item title="Cerrar sesión" prepend-icon="mdi-logout" />
+        <v-list-item title="Cerrar sesión" prepend-icon="mdi-logout" @click="logout"/>
       </v-list>
     </v-menu>
   </v-app-bar>

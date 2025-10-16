@@ -1,3 +1,32 @@
+<script setup>
+import { ref } from 'vue';
+import { useUserStore } from '@/stores/userStore';
+import { useRouter } from 'vue-router';
+
+
+const userStore = useUserStore();
+const router = useRouter();
+
+const userCredentials = ref({
+    email: '',
+    password: ''
+});
+
+const login = async () => {
+
+    console.log('Logging in user with credentials:', userCredentials.value);
+    await userStore.login(userCredentials.value);
+
+    if (userStore.isAuthenticated) {
+        router.push('/');
+    } else {
+        alert('Credenciales inválidas. Por favor, inténtelo de nuevo.');
+        console.log('Login failed');
+    }
+};
+
+</script>
+
 <template>
     <v-container align="center">
         <v-card class="text-center pa-6 rounded-xl w-50" elevation="5">
@@ -9,6 +38,7 @@
             <v-card-text>
                 <p class="text-start font-weight-bold mb-2">Email</p>
                 <v-text-field
+                    v-model="userCredentials.email"
                     label="johndoe@example.com"
                     variant="outlined"
                     single-line
@@ -17,6 +47,7 @@
 
                 <p class="text-start font-weight-bold mb-2">Contraseña</p>
                 <v-text-field
+                    v-model="userCredentials.password"
                     label="••••••"
                     type="password"
                     variant="outlined"
@@ -29,6 +60,7 @@
                     class="text-none w-100 mb-2"
                     variant="flat"
                     color="primary"
+                    @click="login"
                 >
                     Iniciar Sesión
                 </v-btn>

@@ -1,20 +1,10 @@
 <script setup>
+import { useUserStore } from '@/stores/userStore';
 import { computed, ref } from 'vue';
 
-const props = defineProps({
-	userName: {
-		type: String,
-		default: 'Pepe',
-	},
-	avatar: {
-		type: String,
-		default: 'https://i.pravatar.cc/80?img=10',
-	},
-	isSubmitting: {
-		type: Boolean,
-		default: false,
-	},
-});
+const userStore = useUserStore();
+
+const userProfile = computed(() => userStore.user);
 
 const emit = defineEmits(['submit', 'cancel', 'upload']);
 
@@ -29,13 +19,12 @@ const resetForm = () => {
 };
 
 const handleSubmit = () => {
-	if (!canPublish.value || props.isSubmitting) {
+	if (!canPublish.value) {
 		return;
 	}
 
 	emit('submit', {
 		content: content.value.trim(),
-		privacy: privacy.value,
 	});
 	resetForm();
 };
@@ -57,8 +46,8 @@ const triggerUpload = () => {
             <v-row class="mr-5">
                 <v-col cols="2" class="d-flex justify-center align-start">
                     <v-avatar size="48" color="primary">
-                        <template v-if="avatar">
-                            <v-img :src="avatar" alt="avatar" cover />
+                        <template v-if="userProfile.photoUrl">
+                            <v-img :src="userProfile.photoUrl" alt="avatar" cover />
                         </template>
                         <template v-else>
                             <v-icon color="white">mdi-account</v-icon>
@@ -70,7 +59,7 @@ const triggerUpload = () => {
                 <v-col cols="10">
                     <v-textarea
                         v-model="content"
-                        :placeholder="`¿Qué quieres compartir hoy, ${userName}?`"
+                        :placeholder="`¿Qué quieres compartir hoy, ${userProfile.firstName}?`"
                         auto-grow
                         rows="3"
                         hide-details
@@ -95,7 +84,6 @@ const triggerUpload = () => {
                         variant="flat"
 						prepend-icon="mdi-send"
                         :disabled="!canPublish"
-                        :loading="isSubmitting"
                         @click="handleSubmit"
                     >
                         Publicar
