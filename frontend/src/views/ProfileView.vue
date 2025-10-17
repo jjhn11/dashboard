@@ -1,11 +1,12 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import { useUserStore } from '@/stores/userStore.js'
-import backend from '@/config/axios.js'
 
 const router = useRouter()
 const userStore = useUserStore()
+const { user: userProfile } = storeToRefs(userStore)
 
 // Component state
 const isEditing = ref(false)
@@ -17,21 +18,58 @@ const showErrorMessage = ref(false)
 const showSuccessMessage = ref(false)
 const errorMessage = ref('')
 
-// Gender options
-const genderOptions = ['Masculino', 'Femenino', 'Otro']
-
-// User profile data
-const userProfile = computed(() => userStore.user)
-
 // Editable profile copy
 const editableProfile = reactive({
-  email: userProfile.value.email,
-  firstName: userProfile.value.firstName,
-  lastName: userProfile.value.lastName,
-  phone: userProfile.value.phone,
-  bio: userProfile.value.description,
-  photoUrl: userProfile.value.photoUrl
+  email: '',
+  firstName: '',
+  lastName: '',
+  phone: '',
+  photoUrl: '',
+  bio: ''
 });
+
+const profileName = computed(() => {
+  const first = userProfile.value?.firstName ?? ''
+  const last = userProfile.value?.lastName ?? ''
+  const fullName = `${first} ${last}`.trim()
+  return fullName || 'Usuario'
+})
+
+const profileEmail = computed(() => userProfile.value?.email ?? '')
+const profileBio = computed(() => userProfile.value?.bio ?? '')
+
+const profilePhotoSrc = computed(() => {
+  const url = userProfile.value?.photoUrl
+  if (url && url.trim().length > 0) {
+    return url
+  }
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(profileName.value)}&background=1976d2&color=ffffff`
+})
+
+function syncEditableProfile(profile) {
+  editableProfile.email = profile?.email ?? ''
+  editableProfile.firstName = profile?.firstName ?? ''
+  editableProfile.lastName = profile?.lastName ?? ''
+  editableProfile.phone = profile?.phone ?? ''
+  editableProfile.photoUrl = profile?.photoUrl ?? ''
+  editableProfile.bio = profile?.bio ?? ''
+}
+
+watch(
+  userProfile,
+  (profile) => {
+    syncEditableProfile(profile)
+  },
+  { deep: true, immediate: true }
+)
+
+onMounted(async () => {
+  try {
+    await userStore.fetchCurrentUser()
+  } catch (error) {
+    console.error('Error fetching current user profile:', error)
+  }
+})
 
 // Validation rules
 const rules = {
@@ -40,10 +78,16 @@ const rules = {
 
 // Methods
 async function logout() {
-    isLoggingOut.value = true
-  await userStore.logout();
-  router.push({ name: 'login' });
+  if (isLoggingOut.value) return
+  isLoggingOut.value = true
+  try {
+    await userStore.logout()
+    router.push({ name: 'login' })
+  } catch (error) {
+    console.error('Error logging out user:', error)
+  } finally {
     isLoggingOut.value = false
+  }
 }
 
 function toggleEdit() {
@@ -60,30 +104,43 @@ function startEdit() {
 
 function cancelEdit() {
   isEditing.value = false
-  // Reset editable data
-  editableProfile.email = userProfile.value.email;
-  editableProfile.firstName = userProfile.value.firstName;
-  editableProfile.lastName = userProfile.value.lastName;
-  editableProfile.phone = userProfile.value.phone;
-  editableProfile.bio = userProfile.value.bio;
+  syncEditableProfile(userProfile.value)
 }
 
 async function saveProfile() {
   if (!isFormValid.value) return
 
-    isSaving.value = true
+  isSaving.value = true
 
-    try {
-        // Update user profile via API
-        await userStore.updateProfile(editableProfile);
-        showSuccessMessage.value = true
-        isEditing.value = false
-    } catch (error) {
-        errorMessage.value = error.response?.data?.message || 'Error al actualizar el perfil'
-        showErrorMessage.value = true
-    } finally {
-        isSaving.value = false
-    }
+  const trimString = (value) => {
+    if (typeof value !== 'string') return value
+    const trimmed = value.trim()
+    return trimmed
+  }
+
+  const optionalString = (value) => {
+    const trimmed = trimString(value)
+    return trimmed ? trimmed : null
+  }
+
+  const updates = {
+    firstName: trimString(editableProfile.firstName),
+    lastName: trimString(editableProfile.lastName),
+    phone: optionalString(editableProfile.phone),
+    photoUrl: optionalString(editableProfile.photoUrl),
+    bio: optionalString(editableProfile.bio)
+  }
+
+  try {
+    await userStore.updateProfile(updates)
+    showSuccessMessage.value = true
+    isEditing.value = false
+  } catch (error) {
+    errorMessage.value = error.response?.data?.message || 'Error al actualizar el perfil'
+    showErrorMessage.value = true
+  } finally {
+    isSaving.value = false
+  }
 }
 
 </script>
@@ -96,8 +153,8 @@ async function saveProfile() {
         <div class="profile-photo-container">
           <v-avatar size="120" class="profile-photo">
             <v-img 
-              :src="userProfile.photoUrl" 
-              :alt="userProfile.name"
+              :src="profilePhotoSrc"
+              :alt="profileName"
               cover
             />
             <div class="online-indicator"></div>
@@ -105,10 +162,13 @@ async function saveProfile() {
         </div>
         
         <h2 class="text-h5 font-weight-bold mt-4 mb-1">
-          {{ userProfile.firstName }} {{ userProfile.lastName }}
+          {{ profileName }}
         </h2>
         <p class="text-body-1 text-medium-emphasis mb-1">
-          {{ userProfile.email }}
+          {{ profileEmail }}
+        </p>
+        <p v-if="profileBio" class="text-body-2 text-medium-emphasis mt-2">
+          {{ profileBio }}
         </p>
       </div>
 
@@ -128,20 +188,6 @@ async function saveProfile() {
         </div>
 
         <v-form ref="profileForm" v-model="isFormValid">
-          <!-- Username -->
-          <div class="info-field mb-4">
-            <label class="field-label">Nombre de Usuario</label>
-            <v-text-field
-              v-model="editableProfile.username"
-              :readonly="!isEditing"
-              :variant="isEditing ? 'outlined' : 'plain'"
-              density="compact"
-              :rules="[rules.required]"
-              class="profile-input"
-              hide-details="auto"
-            />
-          </div>
-
           <!-- First Name -->
           <div class="info-field mb-4">
             <label class="field-label">Nombres</label>
@@ -170,59 +216,53 @@ async function saveProfile() {
             />
           </div>
 
-          <!-- Gender -->
+          <!-- Phone -->
           <div class="info-field mb-4">
-            <label class="field-label">Género</label>
-            <v-select
-              v-model="editableProfile.gender"
-              :items="genderOptions"
+            <label class="field-label">Teléfono</label>
+            <v-text-field
+              v-model="editableProfile.phone"
               :readonly="!isEditing"
               :variant="isEditing ? 'outlined' : 'plain'"
               density="compact"
-              :rules="[rules.required]"
               class="profile-input"
               hide-details="auto"
             />
           </div>
 
-          <!-- Birthday -->
-            <div class="info-field mb-4">
-                <label class="field-label">Fecha de Nacimiento</label>
-                <v-text-field
-                v-model="editableProfile.birthday"
-                :readonly="!isEditing"
-                :variant="isEditing ? 'outlined' : 'plain'"
-                density="compact"
-                type="date"
-                :rules="[rules.required]"
-                class="profile-input"
-                hide-details="auto"
-                />
-            </div>
+          <!-- Photo URL -->
+          <div class="info-field mb-4">
+            <label class="field-label">URL de la Foto de Perfil</label>
+            <v-text-field
+              v-model="editableProfile.photoUrl"
+              :readonly="!isEditing"
+              :variant="isEditing ? 'outlined' : 'plain'"
+              density="compact"
+              prepend-inner-icon="mdi-image-outline"
+              class="profile-input"
+              hide-details="auto"
+            />
+          </div>
 
           <!-- Bio -->
-            <div class="info-field mb-4">
-                <label class="field-label">Biografía</label>
-                <v-textarea
-                v-model="editableProfile.bio"
-                :readonly="!isEditing"
-                :variant="isEditing ? 'outlined' : 'plain'"
-                density="compact"
-                :rules="[rules.required]"
-                class="profile-input"
-                hide-details="auto"
-                rows="1"
-                auto-grow
-                />
-            </div>
-
-          
+          <div class="info-field mb-4">
+            <label class="field-label">Biografía</label>
+            <v-textarea
+              v-model="editableProfile.bio"
+              :readonly="!isEditing"
+              :variant="isEditing ? 'outlined' : 'plain'"
+              density="compact"
+              class="profile-input"
+              hide-details="auto"
+              rows="2"
+              auto-grow
+            />
+          </div>
 
           <!-- Email (Read only) -->
           <div class="info-field mb-6">
             <label class="field-label">Correo Electrónico</label>
             <v-text-field
-              v-model="userProfile.email"
+              v-model="editableProfile.email"
               readonly
               variant="plain"
               density="compact"

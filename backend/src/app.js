@@ -27,6 +27,8 @@ const bcrypt = require('bcrypt'); // Librería para hashing seguro de contraseñ
 
 const sequelize = require('./database'); // Conexión configurada de Sequelize hacia MySQL.
 const User = require('./models/user'); // Modelo Sequelize que representa a la tabla "users".
+const Post = require('./models/post'); // Modelo Sequelize para las publicaciones del feed.
+const UserPost = require('./models/userPost'); // Tabla intermedia que asigna publicaciones a usuarios.
 
 const {
   PORT = 3000,
@@ -48,6 +50,14 @@ const sessionStore = new SequelizeStore({
   expiration: 7 * 24 * 60 * 60 * 1000 // Las sesiones viven una semana.
 });
 
+// Definimos las asociaciones entre usuarios y publicaciones a través de una tabla pivote.
+User.belongsToMany(Post, { through: UserPost, foreignKey: 'userId' });
+Post.belongsToMany(User, { through: UserPost, foreignKey: 'postId' });
+User.hasMany(UserPost, { foreignKey: 'userId', as: 'postAssignments' });
+Post.hasMany(UserPost, { foreignKey: 'postId', as: 'userAssignments' });
+UserPost.belongsTo(User, { foreignKey: 'userId' });
+UserPost.belongsTo(Post, { foreignKey: 'postId' });
+
 // Sincronizamos la base de datos al arrancar para detectar problemas cuanto antes.
 async function initializeDatabase() {
   try {
@@ -55,6 +65,8 @@ async function initializeDatabase() {
     await sequelize.authenticate();
     // 2) Sincronizamos todos los modelos (crea tablas si no existen).
     await sequelize.sync();
+  // 2.1) Insertamos publicaciones de ejemplo si la tabla está vacía.
+  await ensureSeedPosts();
     // 3) Aseguramos que la tabla de sesiones exista.
     await sessionStore.sync();
     console.info('✅ Base de datos sincronizada (Sequelize)');
@@ -84,6 +96,144 @@ function mapUserInstance(userInstance) {
   } = userInstance.toJSON();
 
   return { id, firstName, lastName, email, phone, photoUrl, bio, createdAt, updatedAt };
+}
+
+const DEFAULT_FEED_POST_COUNT = 2;
+
+const seedPostsPayload = [
+  {
+    authorName: 'Juan Pérez',
+    authorSubtitle: 'Ingeniero de Software',
+    authorAvatar: 'https://i.pravatar.cc/150?img=12',
+    content:
+      'Buenas chavales, saludos a la familia, hoy programé una app web muy chula que flipas flipas macho flipas',
+    mediaUrl: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c',
+    likeCount: 142,
+    commentCount: 26,
+    shareCount: 11
+  },
+  {
+    authorName: 'Juan Pérez',
+    authorSubtitle: 'Ingeniero de Software',
+    authorAvatar: 'https://i.pravatar.cc/150?img=49',
+    content:
+      'Hoy es día de trabajo, coloquialmente conocido como "chamba", en el lenguaje vulgar de lorem ipsum dolor sit amet consectetur adipiscing elit, así es',
+    mediaUrl: null,
+    likeCount: 87,
+    commentCount: 14,
+    shareCount: 6
+  },
+  {
+    authorName: 'Laura Martínez',
+    authorSubtitle: 'UX Researcher',
+    authorAvatar: 'https://i.pravatar.cc/150?img=5',
+    content:
+      'Tuve junta con mis compañeros de trabajo pero no saben nada de diseño ni de usabilidad ni de experiencia de usuario ni de nada',
+    mediaUrl: 'https://images.unsplash.com/photo-1521737604893-d14cc237f11d',
+    likeCount: 203,
+    commentCount: 48,
+    shareCount: 19
+  },
+  {
+    authorName: 'Carlos Gómez',
+    authorSubtitle: 'Data Scientist',
+    authorAvatar: 'https://i.pravatar.cc/150?img=33',
+    content:
+      'Programando para hackear la nasa',
+    mediaUrl: 'https://images.unsplash.com/photo-1517148815978-75f6acaaf32c',
+    likeCount: 64,
+    commentCount: 17,
+    shareCount: 5
+  }
+];
+
+async function ensureSeedPosts() {
+  const postCount = await Post.count();
+  if (postCount > 0) {
+    return;
+  }
+  await Post.bulkCreate(seedPostsPayload);
+  console.info('✅ Publicaciones de ejemplo insertadas');
+}
+
+function mapPostInstance(postInstance, assignmentInstance = null) {
+  if (!postInstance) return null;
+
+  const {
+    id,
+    authorName,
+    authorSubtitle,
+    authorAvatar,
+    content,
+    mediaUrl,
+    likeCount,
+    commentCount,
+    shareCount,
+    createdAt,
+    updatedAt
+  } = postInstance.toJSON();
+
+  return {
+    id,
+    authorName,
+    authorSubtitle,
+    authorAvatar,
+    content,
+    mediaUrl,
+    likes: likeCount,
+    comments: commentCount,
+    shares: shareCount,
+    createdAt,
+    updatedAt,
+    assignedOrder: assignmentInstance?.order ?? null,
+    assignedAt: assignmentInstance?.createdAt ?? null
+  };
+}
+
+async function assignRandomPostsToUser(userId, count = DEFAULT_FEED_POST_COUNT) {
+  const allPosts = await Post.findAll();
+  if (allPosts.length === 0) {
+    return [];
+  }
+
+  const shuffled = [...allPosts].sort(() => Math.random() - 0.5);
+  const selected = shuffled.slice(0, Math.min(count, shuffled.length));
+
+  const insertPayload = selected.map((post, index) => ({
+    userId,
+    postId: post.id,
+    order: index
+  }));
+
+  await UserPost.bulkCreate(insertPayload, { ignoreDuplicates: true });
+
+  return UserPost.findAll({
+    where: { userId },
+    include: [{ model: Post }],
+    order: [
+      ['order', 'ASC'],
+      ['createdAt', 'ASC']
+    ]
+  });
+}
+
+async function getUserFeed(userId) {
+  let assignments = await UserPost.findAll({
+    where: { userId },
+    include: [{ model: Post }],
+    order: [
+      ['order', 'ASC'],
+      ['createdAt', 'ASC']
+    ]
+  });
+
+  if (assignments.length === 0) {
+    assignments = await assignRandomPostsToUser(userId);
+  }
+
+  return assignments
+    .map((assignment) => mapPostInstance(assignment.Post, assignment))
+    .filter(Boolean);
 }
 
 // Funciones auxiliares de acceso a datos (más legibles y testeables).
@@ -241,6 +391,8 @@ app.post(
     });
     const user = mapUserInstance(userInstance);
 
+    await assignRandomPostsToUser(user.id);
+
     req.login(user, (err) => {
       if (err) {
         return next(err);
@@ -258,9 +410,14 @@ app.post('/api/auth/login', (req, res, next) => {
     if (!user) {
       return res.status(400).json({ message: info?.message || 'Credenciales inválidas.' });
     }
-    req.logIn(user, (loginErr) => {
+    req.logIn(user, async (loginErr) => {
       if (loginErr) {
         return next(loginErr);
+      }
+      try {
+        await assignRandomPostsToUser(user.id);
+      } catch (feedError) {
+        console.error('Error asignando publicaciones al iniciar sesión:', feedError);
       }
       return res.json({ user });
     });
@@ -286,6 +443,15 @@ app.post('/api/auth/logout', requireAuth, (req, res, next) => {
 app.get('/api/users/me', requireAuth, (req, res) => {
   return res.json({ user: req.user });
 });
+
+app.get(
+  '/api/posts/feed',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const posts = await getUserFeed(req.user.id);
+    return res.json({ posts });
+  })
+);
 
 app.put(
   '/api/users/me',
