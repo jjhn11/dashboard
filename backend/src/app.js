@@ -205,7 +205,17 @@ async function assignRandomPostsToUser(userId, count = DEFAULT_FEED_POST_COUNT) 
     order: index
   }));
 
-  await UserPost.bulkCreate(insertPayload, { ignoreDuplicates: true });
+  // Insert posts one by one to handle duplicates (Db2 doesn't support ignoreDuplicates)
+  for (const payload of insertPayload) {
+    try {
+      await UserPost.create(payload);
+    } catch (error) {
+      // Ignore duplicate key errors
+      if (!error.message.includes('duplicate') && !error.message.includes('UNIQUE')) {
+        throw error;
+      }
+    }
+  }
 
   return UserPost.findAll({
     where: { userId },
