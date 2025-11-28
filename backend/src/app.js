@@ -29,6 +29,7 @@ const sequelize = require('./database'); // Conexión configurada de Sequelize h
 const User = require('./models/user'); // Modelo Sequelize que representa a la tabla "users".
 const Post = require('./models/post'); // Modelo Sequelize para las publicaciones del feed.
 const UserPost = require('./models/userPost'); // Tabla intermedia que asigna publicaciones a usuarios.
+const { initializeEventNotifications, notifyUserRegistered, notifyUserLogin } = require('./services/notificationService'); // Servicio de notificaciones IBM Event Notifications.
 
 const {
   PORT = 3000,
@@ -403,6 +404,10 @@ app.post(
 
     await assignRandomPostsToUser(user.id);
 
+    // Send notification for new user registration
+    console.log('🔔 Attempting to send registration notification for:', user.email);
+    notifyUserRegistered(user).catch(err => console.error('❌ Notification error:', err));
+
     req.login(user, (err) => {
       if (err) {
         return next(err);
@@ -426,6 +431,9 @@ app.post('/api/auth/login', (req, res, next) => {
       }
       try {
         await assignRandomPostsToUser(user.id);
+        // Send notification for user login
+        console.log('🔔 Attempting to send login notification for:', user.email);
+        notifyUserLogin(user).catch(err => console.error('❌ Notification error:', err));
       } catch (feedError) {
         console.error('Error asignando publicaciones al iniciar sesión:', feedError);
       }
@@ -508,6 +516,15 @@ app.delete(
     });
   })
 );
+
+// === Webhook endpoint para recibir notificaciones de Event Notifications ===
+app.post('/webhook/notifications', express.json(), (req, res) => {
+  console.log('\n🔔 ===== NOTIFICATION RECEIVED =====');
+  console.log('Headers:', JSON.stringify(req.headers, null, 2));
+  console.log('Body:', JSON.stringify(req.body, null, 2));
+  console.log('===================================\n');
+  res.json({ success: true, received: true });
+});
 
 // === Healthcheck simple para monitoreo ===
 app.get('/health', (req, res) => {
